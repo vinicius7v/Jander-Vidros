@@ -1,4 +1,4 @@
-const API_URL = 'jander-vidros-production.up.railway.app';
+const API_URL = 'https://jander-vidros-production.up.railway.app';
 
 const handleResponse = async (response) => {
   if (!response.ok) {
@@ -11,7 +11,8 @@ const handleResponse = async (response) => {
 export const productService = {
   getAll: async () => {
     try {
-      const response = await fetch(`${API_URL}/produtos`);
+      // Adicionado /api/
+      const response = await fetch(`${API_URL}/api/produtos`);
       const data = await handleResponse(response);
       return data.data || [];
     } catch (error) {
@@ -22,7 +23,8 @@ export const productService = {
 
   create: async (productData) => {
     try {
-      const response = await fetch(`${API_URL}/produtos`, {
+      // Adicionado /api/
+      const response = await fetch(`${API_URL}/api/produtos`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -44,7 +46,8 @@ export const productService = {
 
   update: async (id, productData) => {
     try {
-      const response = await fetch(`${API_URL}/produtos/${id}`, {
+      // Adicionado /api/
+      const response = await fetch(`${API_URL}/api/produtos/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -66,7 +69,8 @@ export const productService = {
 
   delete: async (id) => {
     try {
-      const response = await fetch(`${API_URL}/produtos/${id}`, {
+      // Adicionado /api/
+      const response = await fetch(`${API_URL}/api/produtos/${id}`, {
         method: 'DELETE',
       });
       return handleResponse(response);
