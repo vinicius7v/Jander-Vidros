@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
+import { caixaService, clienteService, pendenciaService } from '../services/api';
 import {
   TrendingUp, TrendingDown, AlertCircle,
   UserPlus, Users, Plus, Trash2, CheckCircle, RotateCcw
@@ -12,22 +13,28 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 function Caixa({ user, onLogout }) {
   const [tab, setTab] = useState('caixa');
-
-  const [movimentos, setMovimentos] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('caixa_movimentos') || '[]'); } catch { return []; }
-  });
-
-  const [clientes, setClientes] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('caixa_clientes') || '[]'); } catch { return []; }
-  });
-
-  const save = (key, data) => localStorage.setItem(key, JSON.stringify(data));
+  const [movimentos, setMovimentos] = useState([]);
+  const [clientes, setClientes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filtroCliente, setFiltroCliente] = useState('');
 
   const [novoMov, setNovoMov] = useState({ tipo: 'entrada', descricao: '', valor: '', categoria: '', data: today(), clienteId: '' });
   const [novoCliente, setNovoCliente] = useState({ nome: '', telefone: '', email: '' });
   const [novaPend, setNovaPend] = useState({ clienteId: '', descricao: '', valor: '', data: today() });
-  const [filtroCliente, setFiltroCliente] = useState('');
 
+  useEffect(() => { loadAll(); }, []);
+
+  const loadAll = async () => {
+    setLoading(true);
+    try {
+      const [movs, clis] = await Promise.all([caixaService.getAll(), clienteService.getAll()]);
+      setMovimentos(movs);
+      setClientes(clis);
+    } catch (e) { console.error(e); }
+    setLoading(false);
+  };
+
+  // ── Resumos ──
   const entradas = movimentos.filter(m => m.tipo === 'entrada').reduce((s, m) => s + Number(m.valor), 0);
   const saidas   = movimentos.filter(m => m.tipo === 'saida').reduce((s, m) => s + Number(m.valor), 0);
   const saldo    = entradas - saidas;
@@ -35,53 +42,58 @@ function Caixa({ user, onLogout }) {
     s + (c.pendencias || []).filter(p => p.status === 'pendente').reduce((a, p) => a + Number(p.valor), 0), 0);
   const clientesComPendencia = clientes.filter(c => (c.pendencias || []).some(p => p.status === 'pendente'));
 
-  const addMovimento = () => {
+  // ── Caixa ──
+  const addMovimento = async () => {
     if (!novoMov.descricao || !novoMov.valor) return;
-    const updated = [{ ...novoMov, id: Date.now(), valor: Number(novoMov.valor) }, ...movimentos];
-    setMovimentos(updated); save('caixa_movimentos', updated);
-    setNovoMov({ tipo: 'entrada', descricao: '', valor: '', categoria: '', data: today(), clienteId: '' });
+    try {
+      const res = await caixaService.create({
+        tipo: novoMov.tipo, descricao: novoMov.descricao, valor: Number(novoMov.valor),
+        categoria: novoMov.categoria, data: novoMov.data, cliente_id: novoMov.clienteId || null
+      });
+      await loadAll();
+      setNovoMov({ tipo: 'entrada', descricao: '', valor: '', categoria: '', data: today(), clienteId: '' });
+    } catch (e) { alert('Erro ao salvar movimentação'); }
   };
 
-  const removeMovimento = (id) => {
-    const updated = movimentos.filter(m => m.id !== id);
-    setMovimentos(updated); save('caixa_movimentos', updated);
+  const removeMovimento = async (id) => {
+    try { await caixaService.delete(id); await loadAll(); } catch (e) { alert('Erro ao excluir'); }
   };
 
-  const addCliente = () => {
+  // ── Clientes ──
+  const addCliente = async () => {
     if (!novoCliente.nome) return;
-    const updated = [...clientes, { ...novoCliente, id: Date.now(), pendencias: [] }];
-    setClientes(updated); save('caixa_clientes', updated);
-    setNovoCliente({ nome: '', telefone: '', email: '' });
+    try {
+      await clienteService.create(novoCliente);
+      await loadAll();
+      setNovoCliente({ nome: '', telefone: '', email: '' });
+    } catch (e) { alert('Erro ao cadastrar cliente'); }
   };
 
-  const removeCliente = (id) => {
-    const updated = clientes.filter(c => c.id !== id);
-    setClientes(updated); save('caixa_clientes', updated);
+  const removeCliente = async (id) => {
+    if (!window.confirm('Excluir cliente e todas as pendências?')) return;
+    try { await clienteService.delete(id); await loadAll(); } catch (e) { alert('Erro ao excluir'); }
   };
 
-  const addPendencia = () => {
+  // ── Pendências ──
+  const addPendencia = async () => {
     if (!novaPend.clienteId || !novaPend.descricao || !novaPend.valor) return;
-    const updated = clientes.map(c => c.id !== Number(novaPend.clienteId) ? c : {
-      ...c,
-      pendencias: [...(c.pendencias || []), { id: Date.now(), descricao: novaPend.descricao, valor: Number(novaPend.valor), data: novaPend.data, status: 'pendente' }]
-    });
-    setClientes(updated); save('caixa_clientes', updated);
-    setNovaPend({ clienteId: '', descricao: '', valor: '', data: today() });
+    try {
+      await pendenciaService.create({
+        cliente_id: Number(novaPend.clienteId), descricao: novaPend.descricao,
+        valor: Number(novaPend.valor), data: novaPend.data
+      });
+      await loadAll();
+      setNovaPend({ clienteId: '', descricao: '', valor: '', data: today() });
+    } catch (e) { alert('Erro ao registrar pendência'); }
   };
 
-  const togglePendencia = (clienteId, pendId) => {
-    const updated = clientes.map(c => c.id !== clienteId ? c : {
-      ...c,
-      pendencias: c.pendencias.map(p => p.id === pendId ? { ...p, status: p.status === 'pendente' ? 'pago' : 'pendente' } : p)
-    });
-    setClientes(updated); save('caixa_clientes', updated);
+  const togglePendencia = async (pendId, currentStatus) => {
+    const newStatus = currentStatus === 'pendente' ? 'pago' : 'pendente';
+    try { await pendenciaService.updateStatus(pendId, newStatus); await loadAll(); } catch (e) { alert('Erro'); }
   };
 
-  const removePendencia = (clienteId, pendId) => {
-    const updated = clientes.map(c => c.id !== clienteId ? c : {
-      ...c, pendencias: c.pendencias.filter(p => p.id !== pendId)
-    });
-    setClientes(updated); save('caixa_clientes', updated);
+  const removePendencia = async (id) => {
+    try { await pendenciaService.delete(id); await loadAll(); } catch (e) { alert('Erro'); }
   };
 
   const clientesFiltrados = clientes.filter(c => filtroCliente ? c.id === Number(filtroCliente) : true);
@@ -89,18 +101,22 @@ function Caixa({ user, onLogout }) {
   const inputClass = "w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent";
   const labelClass = "block text-xs font-black text-gray-500 uppercase tracking-widest mb-1";
 
+  if (loading) return (
+    <div className="min-h-screen bg-gray-100 font-sans">
+      <Navbar user={user} onLogout={onLogout} />
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gray-100 font-sans">
       <Navbar user={user} onLogout={onLogout} />
-
       <main className="max-w-7xl mx-auto p-6">
         <header className="mb-6">
-          <h1 className="text-3xl font-black text-gray-800 uppercase italic tracking-tighter">
-            Controle de Caixa
-          </h1>
-          <p className="text-gray-500 font-bold uppercase text-xs tracking-widest">
-            Movimentações, Clientes e Pendências •
-          </p>
+          <h1 className="text-3xl font-black text-gray-800 uppercase italic tracking-tighter">Controle de Caixa</h1>
+          <p className="text-gray-500 font-bold uppercase text-xs tracking-widest">Movimentações, Clientes e Pendências •</p>
         </header>
 
         {/* Cards resumo */}
@@ -123,12 +139,11 @@ function Caixa({ user, onLogout }) {
           </div>
         </div>
 
-        {/* Alerta pendências */}
         {clientesComPendencia.length > 0 && (
           <div className="bg-orange-50 border-l-4 border-orange-500 p-4 rounded-lg mb-6 flex items-center gap-3">
             <AlertCircle className="text-orange-500 shrink-0" size={20} />
             <p className="text-sm font-bold text-orange-800">
-              {clientesComPendencia.length} cliente(s) com pendências em aberto:{' '}
+              {clientesComPendencia.length} cliente(s) com pendências:{' '}
               <span className="font-normal">{clientesComPendencia.map(c => c.nome).join(', ')}</span>
             </p>
           </div>
@@ -197,12 +212,10 @@ function Caixa({ user, onLogout }) {
 
             <div className="border-t pt-4">
               <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Extrato</h4>
-              {movimentos.length === 0 && (
-                <p className="text-center text-gray-400 text-sm py-8">Nenhuma movimentação registrada ainda.</p>
-              )}
+              {movimentos.length === 0 && <p className="text-center text-gray-400 text-sm py-8">Nenhuma movimentação ainda.</p>}
               <div className="space-y-2">
                 {movimentos.map(m => {
-                  const cli = clientes.find(c => c.id === Number(m.clienteId));
+                  const cli = clientes.find(c => c.id === m.cliente_id);
                   return (
                     <div key={m.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl gap-4">
                       <div className="flex items-center gap-3">
@@ -211,7 +224,11 @@ function Caixa({ user, onLogout }) {
                         </div>
                         <div>
                           <p className="text-sm font-bold text-gray-800">{m.descricao}</p>
-                          <p className="text-xs text-gray-400">{m.data}{m.categoria ? ` · ${m.categoria}` : ''}{cli ? ` · ${cli.nome}` : ''}</p>
+                          <p className="text-xs text-gray-400">
+                            {m.data ? new Date(m.data).toLocaleDateString('pt-BR') : ''}
+                            {m.categoria ? ` · ${m.categoria}` : ''}
+                            {cli ? ` · ${cli.nome}` : ''}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
@@ -257,12 +274,9 @@ function Caixa({ user, onLogout }) {
                 </button>
               </div>
             </div>
-
             <div className="border-t pt-4">
-              <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Clientes Cadastrados ({clientes.length})</h4>
-              {clientes.length === 0 && (
-                <p className="text-center text-gray-400 text-sm py-8">Nenhum cliente cadastrado ainda.</p>
-              )}
+              <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Clientes ({clientes.length})</h4>
+              {clientes.length === 0 && <p className="text-center text-gray-400 text-sm py-8">Nenhum cliente cadastrado.</p>}
               <div className="space-y-3">
                 {clientes.map(c => {
                   const pends = (c.pendencias || []).filter(p => p.status === 'pendente');
@@ -273,7 +287,7 @@ function Caixa({ user, onLogout }) {
                         <div className="bg-indigo-100 text-indigo-600 p-2 rounded-xl"><Users size={18} /></div>
                         <div>
                           <p className="text-sm font-black text-gray-800">{c.nome}</p>
-                          <p className="text-xs text-gray-400">{c.telefone || ''}{c.telefone && c.email ? ' · ' : ''}{c.email || ''}</p>
+                          <p className="text-xs text-gray-400">{c.telefone}{c.telefone && c.email ? ' · ' : ''}{c.email}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
@@ -332,9 +346,7 @@ function Caixa({ user, onLogout }) {
                 <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Pendências por Cliente</h4>
                 <div className="flex items-center gap-2">
                   {totalPendente > 0 && (
-                    <span className="text-xs font-black text-orange-600 bg-orange-50 px-3 py-1 rounded-full">
-                      Total: {fmt(totalPendente)}
-                    </span>
+                    <span className="text-xs font-black text-orange-600 bg-orange-50 px-3 py-1 rounded-full">Total: {fmt(totalPendente)}</span>
                   )}
                   <select className="border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-bold text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={filtroCliente} onChange={e => setFiltroCliente(e.target.value)}>
@@ -343,10 +355,6 @@ function Caixa({ user, onLogout }) {
                   </select>
                 </div>
               </div>
-
-              {clientesFiltrados.length === 0 && (
-                <p className="text-center text-gray-400 text-sm py-8">Nenhum cliente encontrado.</p>
-              )}
 
               <div className="space-y-4">
                 {clientesFiltrados.map(c => {
@@ -358,34 +366,29 @@ function Caixa({ user, onLogout }) {
                       <div className="flex items-center justify-between p-4 bg-gray-50">
                         <div>
                           <p className="text-sm font-black text-gray-800">{c.nome}</p>
-                          <p className="text-xs text-gray-400">{c.telefone || ''}{c.telefone && c.email ? ' · ' : ''}{c.email || ''}</p>
+                          <p className="text-xs text-gray-400">{c.telefone}{c.telefone && c.email ? ' · ' : ''}{c.email}</p>
                         </div>
                         {totalC > 0
                           ? <span className="text-sm font-black text-orange-600">⚠ {fmt(totalC)} pendente</span>
                           : <span className="text-xs font-bold text-emerald-600">✓ Sem pendências</span>}
                       </div>
-                      {pends.length === 0 && (
-                        <p className="text-xs text-gray-400 text-center py-4">Nenhuma pendência registrada.</p>
-                      )}
+                      {pends.length === 0 && <p className="text-xs text-gray-400 text-center py-4">Nenhuma pendência.</p>}
                       {pends.map(p => (
                         <div key={p.id} className="flex items-center justify-between px-4 py-3 border-t border-gray-100 gap-4">
                           <div>
                             <p className="text-sm font-bold text-gray-800">{p.descricao}</p>
-                            <p className="text-xs text-gray-400">{p.data}</p>
+                            <p className="text-xs text-gray-400">{p.data ? new Date(p.data).toLocaleDateString('pt-BR') : ''}</p>
                           </div>
                           <div className="flex items-center gap-3 shrink-0">
-                            <span className={`text-sm font-black ${p.status === 'pago' ? 'text-emerald-600' : 'text-orange-500'}`}>
-                              {fmt(p.valor)}
-                            </span>
+                            <span className={`text-sm font-black ${p.status === 'pago' ? 'text-emerald-600' : 'text-orange-500'}`}>{fmt(p.valor)}</span>
                             <span className={`text-xs font-black px-2 py-1 rounded-full ${p.status === 'pago' ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-orange-600'}`}>
                               {p.status === 'pago' ? 'Pago' : 'Pendente'}
                             </span>
-                            <button onClick={() => togglePendencia(c.id, p.id)}
-                              title={p.status === 'pendente' ? 'Marcar como pago' : 'Reabrir'}
-                              className={`p-1.5 rounded-lg transition-colors ${p.status === 'pendente' ? 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50' : 'text-gray-400 hover:text-orange-500 hover:bg-orange-50'}`}>
+                            <button onClick={() => togglePendencia(p.id, p.status)}
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors">
                               {p.status === 'pendente' ? <CheckCircle size={17} /> : <RotateCcw size={17} />}
                             </button>
-                            <button onClick={() => removePendencia(c.id, p.id)} className="text-gray-300 hover:text-red-500 transition-colors p-1.5">
+                            <button onClick={() => removePendencia(p.id)} className="text-gray-300 hover:text-red-500 transition-colors p-1.5">
                               <Trash2 size={15} />
                             </button>
                           </div>
