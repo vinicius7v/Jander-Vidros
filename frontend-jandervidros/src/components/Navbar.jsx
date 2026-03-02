@@ -7,7 +7,8 @@ import {
   Wrench, 
   Settings, 
   LogOut,
-  StickyNote, // Adicionado ícone para Anotações
+  StickyNote,
+  Wallet,
   User
 } from 'lucide-react';
 
@@ -62,9 +63,13 @@ function Navbar({ user, onLogout }) {
               <Wrench size={18} /> Serviços
             </Link>
 
-            {/* NOVO LINK: AGENDA E ANOTAÇÕES */}
             <Link to="/anotacoes" className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs uppercase transition-all ${isActive('/anotacoes')}`}>
               <StickyNote size={18} /> Agenda
+            </Link>
+
+            {/* NOVO LINK: CAIXA */}
+            <Link to="/caixa" className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs uppercase transition-all ${isActive('/caixa')}`}>
+              <Wallet size={18} /> Caixa
             </Link>
           </div>
 
@@ -95,13 +100,14 @@ function Navbar({ user, onLogout }) {
         </div>
       </div>
 
-      {/* MOBILE NAV ATUALIZADO */}
+      {/* MOBILE NAV */}
       <div className="md:hidden flex justify-around bg-indigo-700 p-2 text-[10px] font-bold uppercase italic overflow-x-auto">
-          <Link to="/" className="flex flex-col items-center gap-1 min-w-[60px]"><LayoutDashboard size={16}/> Início</Link>
-          <Link to="/produtos" className="flex flex-col items-center gap-1 min-w-[60px]"><Package size={16}/> Estoque</Link>
-          <Link to="/transacoes" className="flex flex-col items-center gap-1 min-w-[60px]"><ArrowLeftRight size={16}/> Notas</Link>
-          <Link to="/servicos" className="flex flex-col items-center gap-1 min-w-[60px]"><Wrench size={16}/> Serviços</Link>
-          <Link to="/anotacoes" className="flex flex-col items-center gap-1 min-w-[60px]"><StickyNote size={16}/> Agenda</Link>
+        <Link to="/" className="flex flex-col items-center gap-1 min-w-[50px]"><LayoutDashboard size={16}/> Início</Link>
+        <Link to="/produtos" className="flex flex-col items-center gap-1 min-w-[50px]"><Package size={16}/> Estoque</Link>
+        <Link to="/transacoes" className="flex flex-col items-center gap-1 min-w-[50px]"><ArrowLeftRight size={16}/> Notas</Link>
+        <Link to="/servicos" className="flex flex-col items-center gap-1 min-w-[50px]"><Wrench size={16}/> Serviços</Link>
+        <Link to="/anotacoes" className="flex flex-col items-center gap-1 min-w-[50px]"><StickyNote size={16}/> Agenda</Link>
+        <Link to="/caixa" className="flex flex-col items-center gap-1 min-w-[50px]"><Wallet size={16}/> Caixa</Link>
       </div>
     </nav>
   );
