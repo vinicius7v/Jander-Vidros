@@ -9,6 +9,7 @@ import Transactions from './pages/Transactions';
 import Services from './pages/Services';
 import Settings from './pages/Settings';
 import NotesAndSchedule from './pages/NotesAndSchedule'; // 1. IMPORTAÇÃO DA NOVA PÁGINA
+import Caixa from './pages/Caixa';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -73,7 +74,11 @@ function App() {
           element={user ? <Settings user={user} onLogout={handleLogout} /> : <Navigate to="/login" />} 
         />
 
+        <Route path="/caixa" element={<Caixa />} />
+
         <Route path="*" element={<Navigate to="/" />} />
+
+
       </Routes>
     </Router>
   );
