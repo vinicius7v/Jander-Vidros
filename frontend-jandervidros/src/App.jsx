@@ -74,7 +74,7 @@ function App() {
           element={user ? <Settings user={user} onLogout={handleLogout} /> : <Navigate to="/login" />} 
         />
 
-        <Route path="/caixa" element={<Caixa />} />
+        <Route path="/caixa" element={user ? <Caixa user={user} onLogout={handleLogout} /> : <Navigate to="/login" />} />
 
         <Route path="*" element={<Navigate to="/" />} />
 
