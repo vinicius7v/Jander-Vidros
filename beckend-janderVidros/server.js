@@ -147,7 +147,7 @@ app.get('/api/estatisticas', (req, res) => {
 
 // ========== SERVIÇOS ==========
 app.get('/api/servicos', (req, res) => {
-  db.query('SELECT * FROM servicos ORDER BY created_at DESC', (err, r) =>
+  db.query('SELECT * FROM servicos ORDER BY id DESC', (err, r) =>
     err ? res.status(500).json({ error: err.message }) : res.json({ success: true, data: r }));
 });
 
