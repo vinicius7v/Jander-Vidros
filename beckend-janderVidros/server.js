@@ -30,6 +30,22 @@ db.getConnection((err, connection) => {
 });
 
 function createTables() {
+  // Dropa e recria servicos para corrigir colunas antigas
+  db.query('DROP TABLE IF EXISTS servicos', () => {
+    db.query(`CREATE TABLE servicos (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      client VARCHAR(255) NOT NULL,
+      description TEXT,
+      value DECIMAL(10,2) DEFAULT 0,
+      date DATE,
+      status VARCHAR(50) DEFAULT 'Pendente',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`, (err) => {
+      if (err) console.error('Erro ao criar servicos:', err.message);
+      else console.log('Tabela servicos recriada');
+    });
+  });
+
   const tables = [
     `CREATE TABLE IF NOT EXISTS produtos (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -41,15 +57,7 @@ function createTables() {
       data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       data_atualizacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )`,
-    `CREATE TABLE IF NOT EXISTS servicos (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      client VARCHAR(255) NOT NULL,
-      description TEXT,
-      value DECIMAL(10,2) DEFAULT 0,
-      date DATE,
-      status VARCHAR(50) DEFAULT 'Pendente',
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )`,
+
     `CREATE TABLE IF NOT EXISTS clientes (
       id INT AUTO_INCREMENT PRIMARY KEY,
       nome VARCHAR(255) NOT NULL,
@@ -259,3 +267,17 @@ app.delete('/api/orcamentos/:id', (req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
