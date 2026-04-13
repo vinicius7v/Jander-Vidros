@@ -47,7 +47,6 @@ function createTables() {
   });
 
   const tables = [
-    // Novos campos adicionados: preco_compra, preco_venda, fornecedor
     `CREATE TABLE IF NOT EXISTS produtos (
       id INT AUTO_INCREMENT PRIMARY KEY,
       nome VARCHAR(255) NOT NULL,
@@ -61,7 +60,6 @@ function createTables() {
       data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       data_atualizacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )`,
-
     `CREATE TABLE IF NOT EXISTS clientes (
       id INT AUTO_INCREMENT PRIMARY KEY,
       nome VARCHAR(255) NOT NULL,
@@ -108,21 +106,6 @@ function createTables() {
       else console.log(`✅ Tabela ${i + 1} ok`);
     });
   });
-
-  // Adiciona colunas novas caso a tabela produtos já exista sem elas
-  const alterColumns = [
-    `ALTER TABLE produtos ADD COLUMN IF NOT EXISTS preco_compra DECIMAL(10,2) DEFAULT NULL`,
-    `ALTER TABLE produtos ADD COLUMN IF NOT EXISTS preco_venda DECIMAL(10,2) DEFAULT NULL`,
-    `ALTER TABLE produtos ADD COLUMN IF NOT EXISTS fornecedor VARCHAR(255) DEFAULT NULL`
-  ];
-
-  alterColumns.forEach((sql) => {
-    db.query(sql, (err) => {
-      if (err && !err.message.includes('Duplicate column')) {
-        console.error('❌ Erro ao alterar tabela produtos:', err.message);
-      }
-    });
-  });
 }
 
 // ========== PRODUTOS ==========
@@ -138,7 +121,7 @@ app.post('/api/produtos', (req, res) => {
   if (!nome || quantidade === undefined) return res.status(400).json({ error: 'Nome e quantidade são obrigatórios' });
   db.query(
     'INSERT INTO produtos (nome, categoria, quantidade, preco, estoque_minimo, preco_compra, preco_venda, fornecedor) VALUES (?,?,?,?,?,?,?,?)',
-    [nome, categoria || 'Sem categoria', quantidade, preco || 0, estoque_minimo || 0, preco_compra || null, preco_venda || null, fornecedor || null],
+    [nome, categoria || 'Sem categoria', quantidade, preco || 0, estoque_minimo || 0, preco_compra ?? null, preco_venda ?? null, fornecedor ?? null],
     (err, r) => err ? res.status(500).json({ error: err.message }) : res.status(201).json({ success: true, id: r.insertId })
   );
 });
@@ -147,7 +130,7 @@ app.put('/api/produtos/:id', (req, res) => {
   const { nome, categoria, quantidade, preco, estoque_minimo, preco_compra, preco_venda, fornecedor } = req.body;
   db.query(
     'UPDATE produtos SET nome=?, categoria=?, quantidade=?, preco=?, estoque_minimo=?, preco_compra=?, preco_venda=?, fornecedor=? WHERE id=?',
-    [nome, categoria, quantidade, preco || 0, estoque_minimo, preco_compra || null, preco_venda || null, fornecedor || null, req.params.id],
+    [nome, categoria, quantidade, preco || 0, estoque_minimo, preco_compra ?? null, preco_venda ?? null, fornecedor ?? null, req.params.id],
     (err, r) => {
       if (err) return res.status(500).json({ error: err.message });
       if (r.affectedRows === 0) return res.status(404).json({ error: 'Produto não encontrado' });
