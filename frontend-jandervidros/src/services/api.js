@@ -10,8 +10,8 @@ const handleResponse = async (response) => {
 
 // ========== PRODUTOS ==========
 export const productService = {
-  getAll: async () => {
-    const response = await fetch(`${API_URL}/api/produtos`);
+  getAll: async (signal) => {
+    const response = await fetch(`${API_URL}/api/produtos`, { signal });
     const data = await handleResponse(response);
     return data.data || [];
   },
@@ -24,7 +24,10 @@ export const productService = {
         categoria: productData.category,
         quantidade: productData.quantity,
         preco: productData.price || 0,
-        estoque_minimo: productData.minStock || 0
+        estoque_minimo: productData.minStock || 0,
+        preco_compra: productData.purchasePrice ?? null,
+        preco_venda: productData.salePrice ?? null,
+        fornecedor: productData.supplier ?? null,
       }),
     });
     return handleResponse(response);
@@ -38,7 +41,10 @@ export const productService = {
         categoria: productData.category,
         quantidade: productData.quantity,
         preco: productData.price || 0,
-        estoque_minimo: productData.minStock || 0
+        estoque_minimo: productData.minStock || 0,
+        preco_compra: productData.purchasePrice ?? null,
+        preco_venda: productData.salePrice ?? null,
+        fornecedor: productData.supplier ?? null,
       }),
     });
     return handleResponse(response);

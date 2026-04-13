@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Navbar from '../components/Navbar';
 import ProductForm from '../components/ProductForm';
 import ProductTable from '../components/ProductTable';
@@ -12,17 +12,20 @@ function Products({ user, onLogout }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    loadProducts();
-  }, []);
+  const loadProducts = useCallback(async () => {
+    let cancelled = false;
 
-  const loadProducts = async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
     try {
       setLoading(true);
       setError(null);
-      const data = await productService.getAll();
-      
-      // Converter formato do backend para frontend
+
+      const data = await productService.getAll(controller.signal);
+
+      if (cancelled) return;
+
       const formattedProducts = data.map(p => ({
         id: p.id.toString(),
         name: p.nome,
@@ -30,17 +33,43 @@ function Products({ user, onLogout }) {
         quantity: p.quantidade,
         price: parseFloat(p.preco),
         minStock: p.estoque_minimo,
-        createdAt: p.data_criacao
+        createdAt: p.data_criacao,
+
+        purchasePrice: parseFloat(p.preco_compra),
+        salePrice:     parseFloat(p.preco_venda),
+        supplier:      p.fornecedor,
+        purchasePrice: p.preco_compra ? parseFloat(p.preco_compra) : null,
+        salePrice:     p.preco_venda  ? parseFloat(p.preco_venda)  : null,
+        supplier:      p.fornecedor   ?? null,
       }));
-      
+
       setProducts(formattedProducts);
     } catch (err) {
-      setError('Erro ao carregar produtos. Verifique se o backend está rodando.');
+      if (cancelled) return;
+
+      if (err.name === 'AbortError') {
+        setError('A requisição demorou demais. Verifique a conexão com o backend.');
+      } else {
+        setError('Erro ao carregar produtos. Verifique se o backend está rodando.');
+      }
       console.error(err);
     } finally {
-      setLoading(false);
+      clearTimeout(timeout);
+      if (!cancelled) setLoading(false);
     }
-  };
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    const cancel = loadProducts();
+    return () => {
+      if (typeof cancel === 'function') cancel();
+    };
+  }, [loadProducts]);
 
   const handleSaveProduct = async (productData) => {
     try {
@@ -49,7 +78,7 @@ function Products({ user, onLogout }) {
       } else {
         await productService.create(productData);
       }
-      
+
       await loadProducts();
       setIsAdding(false);
       setEditingProduct(null);
@@ -115,14 +144,12 @@ function Products({ user, onLogout }) {
   return (
     <div className="min-h-screen bg-gray-100">
       <Navbar user={user} onLogout={onLogout} />
-      
+
       <div className="max-w-7xl mx-auto p-6">
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-800 mb-2">Produtos</h1>
-            <p className="text-gray-600">
-              Conectado ao MySQL ✅
-            </p>
+            <p className="text-gray-600">Conectado ao MySQL ✅</p>
           </div>
           <button
             onClick={() => setIsAdding(!isAdding)}
@@ -135,7 +162,7 @@ function Products({ user, onLogout }) {
 
         {isAdding && (
           <div className="mb-6">
-            <ProductForm 
+            <ProductForm
               product={editingProduct}
               onSave={handleSaveProduct}
               onCancel={handleCancel}

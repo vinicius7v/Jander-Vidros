@@ -20,7 +20,6 @@ function Dashboard({ user, onLogout }) {
     produtosEstoqueBaixo: 0
   });
   const [loading, setLoading] = useState(true);
-  const [lowStockProducts, setLowStockProducts] = useState([]);
 
   useEffect(() => {
     loadStats();
@@ -30,10 +29,8 @@ function Dashboard({ user, onLogout }) {
     try {
       setLoading(true);
       
-      // Buscar produtos do MySQL
       const produtos = await productService.getAll();
       
-      // Buscar serviços e compromissos do localStorage (por enquanto)
       const servicos = JSON.parse(localStorage.getItem('services') || '[]');
       const compromissos = JSON.parse(localStorage.getItem('personal_appointments') || '[]');
 
@@ -42,7 +39,6 @@ function Dashboard({ user, onLogout }) {
         return statusAtual !== 'concluído' && statusAtual !== 'concluido';
       }).length;
 
-      // Produtos com estoque baixo
       const baixoEstoque = produtos.filter(p => 
         p.quantidade <= p.estoque_minimo || p.quantidade <= 1
       );
@@ -54,11 +50,8 @@ function Dashboard({ user, onLogout }) {
         produtosEstoqueBaixo: baixoEstoque.length
       });
 
-      setLowStockProducts(baixoEstoque.slice(0, 5)); // Primeiros 5
-
     } catch (err) {
       console.error('Erro ao carregar estatísticas:', err);
-      // Fallback para localStorage se backend não estiver disponível
       const produtos = JSON.parse(localStorage.getItem('products') || '[]');
       const servicos = JSON.parse(localStorage.getItem('services') || '[]');
       const compromissos = JSON.parse(localStorage.getItem('personal_appointments') || '[]');
@@ -168,30 +161,22 @@ function Dashboard({ user, onLogout }) {
         </div>
 
         {/* ALERTA DE ESTOQUE BAIXO */}
-        {lowStockProducts.length > 0 && (
+        {stats.produtosEstoqueBaixo > 0 && (
           <div className="bg-orange-50 border-l-4 border-orange-500 p-6 rounded-lg mb-8">
-            <div className="flex items-center gap-3 mb-4">
-              <AlertCircle className="w-6 h-6 text-orange-600" />
-              <h3 className="text-lg font-semibold text-orange-800">
-                ⚠️ {stats.produtosEstoqueBaixo} produto(s) com estoque baixo
-              </h3>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="w-6 h-6 text-orange-600" />
+                <p className="text-orange-800 font-semibold">
+                  ⚠️ {stats.produtosEstoqueBaixo} produto(s) com estoque baixo
+                </p>
+              </div>
+              <button
+                onClick={() => navigate('/produtos')}
+                className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors font-semibold text-sm"
+              >
+                Ver produtos
+              </button>
             </div>
-            <div className="space-y-2">
-              {lowStockProducts.map(product => (
-                <div key={product.id} className="bg-white p-3 rounded flex justify-between items-center">
-                  <span className="font-medium text-gray-800">{product.nome}</span>
-                  <span className="text-orange-600 font-semibold">
-                    Quantidade: {product.quantidade}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <button
-              onClick={() => navigate('/produtos')}
-              className="mt-4 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors font-semibold"
-            >
-              Ver todos os produtos
-            </button>
           </div>
         )}
 
