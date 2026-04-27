@@ -9,7 +9,8 @@ import {
   LogOut,
   StickyNote,
   Wallet,
-  User
+  User,
+  Users
 } from 'lucide-react';
 
 function Navbar({ user, onLogout }) {
@@ -67,9 +68,12 @@ function Navbar({ user, onLogout }) {
               <StickyNote size={18} /> Agenda
             </Link>
 
-            {/* NOVO LINK: CAIXA */}
             <Link to="/caixa" className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs uppercase transition-all ${isActive('/caixa')}`}>
               <Wallet size={18} /> Caixa
+            </Link>
+
+            <Link to="/clientes" className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs uppercase transition-all ${isActive('/clientes')}`}>
+              <Users size={18} /> Clientes
             </Link>
           </div>
 
@@ -108,6 +112,7 @@ function Navbar({ user, onLogout }) {
         <Link to="/servicos" className="flex flex-col items-center gap-1 min-w-[50px]"><Wrench size={16}/> Serviços</Link>
         <Link to="/anotacoes" className="flex flex-col items-center gap-1 min-w-[50px]"><StickyNote size={16}/> Agenda</Link>
         <Link to="/caixa" className="flex flex-col items-center gap-1 min-w-[50px]"><Wallet size={16}/> Caixa</Link>
+        <Link to="/clientes" className="flex flex-col items-center gap-1 min-w-[50px]"><Users size={16}/> Clientes</Link>
       </div>
     </nav>
   );

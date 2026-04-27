@@ -7,7 +7,8 @@ import {
   Wrench, 
   ClipboardList, 
   ArrowRight,
-  AlertCircle
+  AlertCircle,
+  Users
 } from 'lucide-react';
 import { productService } from '../services/api';
 
@@ -17,7 +18,8 @@ function Dashboard({ user, onLogout }) {
     totalProdutos: 0,
     servicosPendentes: 0,
     totalCompromissos: 0,
-    produtosEstoqueBaixo: 0
+    produtosEstoqueBaixo: 0,
+    totalClientes: 0
   });
   const [loading, setLoading] = useState(true);
 
@@ -33,6 +35,7 @@ function Dashboard({ user, onLogout }) {
       
       const servicos = JSON.parse(localStorage.getItem('services') || '[]');
       const compromissos = JSON.parse(localStorage.getItem('personal_appointments') || '[]');
+      const clientes = JSON.parse(localStorage.getItem('clients') || '[]');
 
       const pendentes = servicos.filter(s => {
         const statusAtual = s.status ? s.status.trim().toLowerCase() : 'pendente';
@@ -47,7 +50,8 @@ function Dashboard({ user, onLogout }) {
         totalProdutos: produtos.length,
         servicosPendentes: pendentes,
         totalCompromissos: compromissos.length,
-        produtosEstoqueBaixo: baixoEstoque.length
+        produtosEstoqueBaixo: baixoEstoque.length,
+        totalClientes: clientes.length
       });
 
     } catch (err) {
@@ -55,6 +59,7 @@ function Dashboard({ user, onLogout }) {
       const produtos = JSON.parse(localStorage.getItem('products') || '[]');
       const servicos = JSON.parse(localStorage.getItem('services') || '[]');
       const compromissos = JSON.parse(localStorage.getItem('personal_appointments') || '[]');
+      const clientes = JSON.parse(localStorage.getItem('clients') || '[]');
 
       const pendentes = servicos.filter(s => {
         const statusAtual = s.status ? s.status.trim().toLowerCase() : 'pendente';
@@ -65,7 +70,8 @@ function Dashboard({ user, onLogout }) {
         totalProdutos: produtos.length,
         servicosPendentes: pendentes,
         totalCompromissos: compromissos.length,
-        produtosEstoqueBaixo: 0
+        produtosEstoqueBaixo: 0,
+        totalClientes: clientes.length
       });
     } finally {
       setLoading(false);
@@ -101,7 +107,7 @@ function Dashboard({ user, onLogout }) {
         </header>
 
         {/* CARDS PRINCIPAIS */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           
           {/* COMPROMISSOS */}
           <button 
@@ -158,6 +164,23 @@ function Dashboard({ user, onLogout }) {
             </div>
             <ArrowRight className="text-orange-300 group-hover:text-orange-600 group-hover:translate-x-2 transition-all" />
           </button>
+
+          {/* CLIENTES */}
+          <button 
+            onClick={() => navigate('/clientes')}
+            className="bg-white p-6 rounded-3xl shadow-lg border-l-8 border-sky-500 flex items-center justify-between group hover:bg-sky-50 transition-all text-left"
+          >
+            <div className="flex items-center gap-4">
+              <div className="bg-sky-100 p-3 rounded-2xl text-sky-600 group-hover:scale-110 transition-transform">
+                <Users size={24} />
+              </div>
+              <div>
+                <p className="text-xs font-black text-gray-400 uppercase">Clientes</p>
+                <h2 className="text-2xl font-black text-sky-600">{stats.totalClientes} Cadastrados</h2>
+              </div>
+            </div>
+            <ArrowRight className="text-sky-300 group-hover:text-sky-600 group-hover:translate-x-2 transition-all" />
+          </button>
         </div>
 
         {/* ALERTA DE ESTOQUE BAIXO */}
@@ -187,11 +210,12 @@ function Dashboard({ user, onLogout }) {
             <h3 className="text-lg font-black uppercase italic">Ações Rápidas</h3>
           </div>
           
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <button onClick={() => navigate('/transacoes')} className="p-4 bg-gray-50 rounded-2xl hover:bg-indigo-600 hover:text-white transition-all font-bold text-sm uppercase">Nova Venda</button>
             <button onClick={() => navigate('/produtos')} className="p-4 bg-gray-50 rounded-2xl hover:bg-indigo-600 hover:text-white transition-all font-bold text-sm uppercase">Estoque</button>
             <button onClick={() => navigate('/servicos')} className="p-4 bg-gray-50 rounded-2xl hover:bg-indigo-600 hover:text-white transition-all font-bold text-sm uppercase">Novo Serviço</button>
             <button onClick={() => navigate('/anotacoes')} className="p-4 bg-gray-50 rounded-2xl hover:bg-indigo-600 hover:text-white transition-all font-bold text-sm uppercase">Ver Agenda</button>
+            <button onClick={() => navigate('/clientes')} className="p-4 bg-gray-50 rounded-2xl hover:bg-sky-500 hover:text-white transition-all font-bold text-sm uppercase">Clientes</button>
           </div>
         </div>
       </main>
