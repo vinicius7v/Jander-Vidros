@@ -74,6 +74,7 @@ function createTables() {
       valor DECIMAL(10,2) DEFAULT 0,
       data DATE,
       status VARCHAR(20) DEFAULT 'pendente',
+      observacoes JSON DEFAULT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE
     )`,
@@ -105,6 +106,12 @@ function createTables() {
       if (err) console.error(`❌ Erro tabela ${i + 1}:`, err.message);
       else console.log(`✅ Tabela ${i + 1} ok`);
     });
+  });
+
+  // Adiciona coluna observacoes se ainda não existir (para bancos já criados)
+  db.query(`ALTER TABLE pendencias ADD COLUMN IF NOT EXISTS observacoes JSON DEFAULT NULL`, (err) => {
+    if (err && !err.message.includes('Duplicate column')) console.error('Erro ao adicionar observacoes:', err.message);
+    else console.log('✅ Coluna observacoes ok');
   });
 }
 
@@ -191,7 +198,10 @@ app.get('/api/clientes', (req, res) => {
       if (err2) return res.status(500).json({ error: err2.message });
       const data = clientes.map(c => ({
         ...c,
-        pendencias: pendencias.filter(p => p.cliente_id === c.id)
+        pendencias: pendencias.filter(p => p.cliente_id === c.id).map(p => ({
+          ...p,
+          observacoes: typeof p.observacoes === 'string' ? JSON.parse(p.observacoes || '[]') : (p.observacoes || [])
+        }))
       }));
       res.json({ success: true, data });
     });
@@ -214,14 +224,28 @@ app.delete('/api/clientes/:id', (req, res) => {
 // ========== PENDÊNCIAS ==========
 app.post('/api/pendencias', (req, res) => {
   const { cliente_id, descricao, valor, data } = req.body;
-  db.query('INSERT INTO pendencias (cliente_id, descricao, valor, data) VALUES (?,?,?,?)',
-    [cliente_id, descricao, valor || 0, data],
+  db.query('INSERT INTO pendencias (cliente_id, descricao, valor, data, observacoes) VALUES (?,?,?,?,?)',
+    [cliente_id, descricao, valor || 0, data, JSON.stringify([])],
     (err, r) => err ? res.status(500).json({ error: err.message }) : res.status(201).json({ success: true, id: r.insertId }));
 });
 
 app.put('/api/pendencias/:id', (req, res) => {
-  const { status } = req.body;
-  db.query('UPDATE pendencias SET status=? WHERE id=?', [status, req.params.id],
+  const { status, descricao, valor, data, observacoes } = req.body;
+
+  // Monta apenas os campos enviados
+  const fields = [];
+  const values = [];
+
+  if (status !== undefined)      { fields.push('status=?');      values.push(status); }
+  if (descricao !== undefined)   { fields.push('descricao=?');   values.push(descricao); }
+  if (valor !== undefined)       { fields.push('valor=?');       values.push(valor); }
+  if (data !== undefined)        { fields.push('data=?');        values.push(data); }
+  if (observacoes !== undefined) { fields.push('observacoes=?'); values.push(JSON.stringify(observacoes)); }
+
+  if (fields.length === 0) return res.status(400).json({ error: 'Nenhum campo para atualizar' });
+
+  values.push(req.params.id);
+  db.query(`UPDATE pendencias SET ${fields.join(', ')} WHERE id=?`, values,
     (err) => err ? res.status(500).json({ error: err.message }) : res.json({ success: true }));
 });
 

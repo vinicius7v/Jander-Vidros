@@ -115,6 +115,14 @@ export const pendenciaService = {
     });
     return handleResponse(response);
   },
+  update: async (id, data) => {
+    const response = await fetch(`${API_URL}/api/pendencias/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return handleResponse(response);
+  },
   updateStatus: async (id, status) => {
     const response = await fetch(`${API_URL}/api/pendencias/${id}`, {
       method: 'PUT',

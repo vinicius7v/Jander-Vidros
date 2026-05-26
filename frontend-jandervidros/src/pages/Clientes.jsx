@@ -2,13 +2,16 @@ import React, { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import { clienteService, pendenciaService } from '../services/api';
 import {
-  AlertCircle, UserPlus, Users, Plus, Trash2, CheckCircle, RotateCcw
+  AlertCircle, UserPlus, Users, Plus, Trash2, CheckCircle, RotateCcw,
+  Pencil, X, Save, MessageSquarePlus, ChevronDown, ChevronUp
 } from 'lucide-react';
 
 const fmt = (v) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
 const today = () => new Date().toISOString().slice(0, 10);
+
+const fmtData = (d) => d ? new Date(d).toLocaleDateString('pt-BR') : '';
 
 function Clientes({ user, onLogout }) {
   const [tab, setTab] = useState('clientes');
@@ -18,6 +21,14 @@ function Clientes({ user, onLogout }) {
 
   const [novoCliente, setNovoCliente] = useState({ nome: '', telefone: '', email: '' });
   const [novaPend, setNovaPend] = useState({ clienteId: '', descricao: '', valor: '', data: today() });
+
+  // Edição de pendência (descricao/valor/data)
+  const [editandoPend, setEditandoPend] = useState(null);
+
+  // Observações: qual pendência está com o painel aberto
+  const [obsAberta, setObsAberta] = useState(null);
+  // Nova observação a ser adicionada
+  const [novaObs, setNovaObs] = useState({ texto: '', valor: '', data: today() });
 
   useEffect(() => { loadAll(); }, []);
 
@@ -71,10 +82,52 @@ function Clientes({ user, onLogout }) {
     try { await pendenciaService.delete(id); await loadAll(); } catch (e) { alert('Erro'); }
   };
 
+  const salvarEdicaoPend = async () => {
+    if (!editandoPend.descricao || !editandoPend.valor) return;
+    try {
+      await pendenciaService.update(editandoPend.id, {
+        descricao: editandoPend.descricao,
+        valor: Number(editandoPend.valor),
+        data: editandoPend.data
+      });
+      await loadAll();
+      setEditandoPend(null);
+    } catch (e) { alert('Erro ao salvar edição'); }
+  };
+
+  // ── Observações ──
+  const addObservacao = async (pend) => {
+    if (!novaObs.texto) return;
+    const obs = Array.isArray(pend.observacoes) ? pend.observacoes : [];
+    const novaLista = [
+      ...obs,
+      {
+        id: Date.now(),
+        texto: novaObs.texto,
+        valor: novaObs.valor ? Number(novaObs.valor) : null,
+        data: novaObs.data
+      }
+    ];
+    try {
+      await pendenciaService.update(pend.id, { observacoes: novaLista });
+      await loadAll();
+      setNovaObs({ texto: '', valor: '', data: today() });
+    } catch (e) { alert('Erro ao adicionar observação'); }
+  };
+
+  const removeObservacao = async (pend, obsId) => {
+    const obs = (pend.observacoes || []).filter(o => o.id !== obsId);
+    try {
+      await pendenciaService.update(pend.id, { observacoes: obs });
+      await loadAll();
+    } catch (e) { alert('Erro ao remover observação'); }
+  };
+
   const clientesFiltrados = clientes.filter(c => filtroCliente ? c.id === Number(filtroCliente) : true);
 
   const inputClass = "w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent";
   const labelClass = "block text-xs font-black text-gray-500 uppercase tracking-widest mb-1";
+  const editInputClass = "border border-indigo-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white";
 
   if (loading) return (
     <div className="min-h-screen bg-gray-100 font-sans">
@@ -249,6 +302,7 @@ function Clientes({ user, onLogout }) {
                   const totalC = pends.filter(p => p.status === 'pendente').reduce((s, p) => s + Number(p.valor), 0);
                   return (
                     <div key={c.id} className="border border-gray-200 rounded-2xl overflow-hidden">
+                      {/* Cabeçalho do cliente */}
                       <div className="flex items-center justify-between p-4 bg-gray-50">
                         <div>
                           <p className="text-sm font-black text-gray-800">{c.nome}</p>
@@ -258,28 +312,152 @@ function Clientes({ user, onLogout }) {
                           ? <span className="text-sm font-black text-orange-600">⚠ {fmt(totalC)} pendente</span>
                           : <span className="text-xs font-bold text-emerald-600">✓ Sem pendências</span>}
                       </div>
+
                       {pends.length === 0 && <p className="text-xs text-gray-400 text-center py-4">Nenhuma pendência.</p>}
-                      {pends.map(p => (
-                        <div key={p.id} className="flex items-center justify-between px-4 py-3 border-t border-gray-100 gap-4">
-                          <div>
-                            <p className="text-sm font-bold text-gray-800">{p.descricao}</p>
-                            <p className="text-xs text-gray-400">{p.data ? new Date(p.data).toLocaleDateString('pt-BR') : ''}</p>
+
+                      {pends.map(p => {
+                        const isEditing = editandoPend?.id === p.id;
+                        const isObsOpen = obsAberta === p.id;
+                        const obs = Array.isArray(p.observacoes) ? p.observacoes : [];
+
+                        return (
+                          <div key={p.id} className={`border-t border-gray-100 ${isEditing ? 'bg-indigo-50' : ''}`}>
+
+                            {isEditing ? (
+                              /* ── MODO EDIÇÃO ── */
+                              <div className="px-4 py-3 flex flex-wrap items-end gap-3">
+                                <div className="flex-1 min-w-[160px]">
+                                  <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Descrição</label>
+                                  <input className={editInputClass + ' w-full'} value={editandoPend.descricao}
+                                    onChange={e => setEditandoPend({ ...editandoPend, descricao: e.target.value })} />
+                                </div>
+                                <div className="w-28">
+                                  <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Valor (R$)</label>
+                                  <input className={editInputClass + ' w-full'} type="number" value={editandoPend.valor}
+                                    onChange={e => setEditandoPend({ ...editandoPend, valor: e.target.value })} />
+                                </div>
+                                <div className="w-36">
+                                  <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Data</label>
+                                  <input className={editInputClass + ' w-full'} type="date" value={editandoPend.data}
+                                    onChange={e => setEditandoPend({ ...editandoPend, data: e.target.value })} />
+                                </div>
+                                <div className="flex gap-2">
+                                  <button onClick={salvarEdicaoPend}
+                                    className="flex items-center gap-1 bg-indigo-600 text-white text-xs font-black px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors">
+                                    <Save size={14} /> Salvar
+                                  </button>
+                                  <button onClick={() => setEditandoPend(null)}
+                                    className="flex items-center gap-1 bg-gray-200 text-gray-600 text-xs font-black px-3 py-2 rounded-lg hover:bg-gray-300 transition-colors">
+                                    <X size={14} /> Cancelar
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              /* ── MODO VISUALIZAÇÃO ── */
+                              <div className="flex items-center justify-between px-4 py-3 gap-4">
+                                <div>
+                                  <p className="text-sm font-bold text-gray-800">{p.descricao}</p>
+                                  <p className="text-xs text-gray-400">{fmtData(p.data)}</p>
+                                </div>
+                                <div className="flex items-center gap-3 shrink-0">
+                                  <span className={`text-sm font-black ${p.status === 'pago' ? 'text-emerald-600' : 'text-orange-500'}`}>{fmt(p.valor)}</span>
+                                  <span className={`text-xs font-black px-2 py-1 rounded-full ${p.status === 'pago' ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-orange-600'}`}>
+                                    {p.status === 'pago' ? 'Pago' : 'Pendente'}
+                                  </span>
+                                  {/* Botão observações */}
+                                  <button
+                                    onClick={() => { setObsAberta(isObsOpen ? null : p.id); setNovaObs({ texto: '', valor: '', data: today() }); }}
+                                    className={`p-1.5 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold ${isObsOpen ? 'bg-violet-100 text-violet-600' : 'text-gray-400 hover:text-violet-600 hover:bg-violet-50'}`}
+                                    title="Observações">
+                                    <MessageSquarePlus size={15} />
+                                    {obs.length > 0 && <span>{obs.length}</span>}
+                                    {isObsOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                  </button>
+                                  <button
+                                    onClick={() => setEditandoPend({ id: p.id, descricao: p.descricao, valor: p.valor, data: p.data || today() })}
+                                    className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors" title="Editar">
+                                    <Pencil size={15} />
+                                  </button>
+                                  <button onClick={() => togglePendencia(p.id, p.status)}
+                                    className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                                    title={p.status === 'pendente' ? 'Marcar como pago' : 'Reabrir'}>
+                                    {p.status === 'pendente' ? <CheckCircle size={17} /> : <RotateCcw size={17} />}
+                                  </button>
+                                  <button onClick={() => removePendencia(p.id)} className="text-gray-300 hover:text-red-500 transition-colors p-1.5">
+                                    <Trash2 size={15} />
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* ── PAINEL DE OBSERVAÇÕES ── */}
+                            {isObsOpen && (
+                              <div className="bg-violet-50 border-t border-violet-100 px-4 py-4">
+                                <p className="text-[10px] font-black text-violet-400 uppercase tracking-widest mb-3">Observações</p>
+
+                                {/* Lista de observações */}
+                                {obs.length === 0 && (
+                                  <p className="text-xs text-gray-400 mb-3">Nenhuma observação ainda.</p>
+                                )}
+                                <div className="space-y-2 mb-4">
+                                  {obs.map(o => (
+                                    <div key={o.id} className="flex items-start justify-between bg-white rounded-xl px-3 py-2 gap-3 shadow-sm">
+                                      <div className="flex-1">
+                                        <p className="text-sm text-gray-800">{o.texto}</p>
+                                        <p className="text-xs text-gray-400 mt-0.5">
+                                          {fmtData(o.data)}
+                                          {o.valor ? <span className="ml-2 font-bold text-emerald-600">{fmt(o.valor)}</span> : ''}
+                                        </p>
+                                      </div>
+                                      <button onClick={() => removeObservacao(p, o.id)}
+                                        className="text-gray-300 hover:text-red-500 transition-colors shrink-0 mt-0.5">
+                                        <Trash2 size={13} />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+
+                                {/* Formulário nova observação */}
+                                <div className="flex flex-wrap gap-2 items-end">
+                                  <div className="flex-1 min-w-[160px]">
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Observação</label>
+                                    <input
+                                      className="w-full border border-violet-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 bg-white"
+                                      placeholder="Ex: Cliente pagou R$ 100..."
+                                      value={novaObs.texto}
+                                      onChange={e => setNovaObs({ ...novaObs, texto: e.target.value })}
+                                    />
+                                  </div>
+                                  <div className="w-28">
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Valor (R$)</label>
+                                    <input
+                                      className="w-full border border-violet-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 bg-white"
+                                      type="number" placeholder="0,00"
+                                      value={novaObs.valor}
+                                      onChange={e => setNovaObs({ ...novaObs, valor: e.target.value })}
+                                    />
+                                  </div>
+                                  <div className="w-36">
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Data</label>
+                                    <input
+                                      className="w-full border border-violet-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 bg-white"
+                                      type="date"
+                                      value={novaObs.data}
+                                      onChange={e => setNovaObs({ ...novaObs, data: e.target.value })}
+                                    />
+                                  </div>
+                                  <button
+                                    onClick={() => addObservacao(p)}
+                                    className="flex items-center gap-1 bg-violet-600 text-white text-xs font-black px-4 py-2 rounded-lg hover:bg-violet-700 transition-colors">
+                                    <Plus size={14} /> Adicionar
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
                           </div>
-                          <div className="flex items-center gap-3 shrink-0">
-                            <span className={`text-sm font-black ${p.status === 'pago' ? 'text-emerald-600' : 'text-orange-500'}`}>{fmt(p.valor)}</span>
-                            <span className={`text-xs font-black px-2 py-1 rounded-full ${p.status === 'pago' ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-orange-600'}`}>
-                              {p.status === 'pago' ? 'Pago' : 'Pendente'}
-                            </span>
-                            <button onClick={() => togglePendencia(p.id, p.status)}
-                              className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors">
-                              {p.status === 'pendente' ? <CheckCircle size={17} /> : <RotateCcw size={17} />}
-                            </button>
-                            <button onClick={() => removePendencia(p.id)} className="text-gray-300 hover:text-red-500 transition-colors p-1.5">
-                              <Trash2 size={15} />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   );
                 })}
