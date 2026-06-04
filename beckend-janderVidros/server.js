@@ -18,24 +18,38 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
  
 // ========== CONFIGURAÇÃO DO BANCO DE DADOS ==========
-const db = mysql.createPool({
-  host: process.env.DB_HOST || process.env.MYSQLHOST || 'localhost',
-  port: process.env.DB_PORT || process.env.MYSQLPORT || 3306,
-  user: process.env.DB_USER || process.env.MYSQLUSER || 'root',
-  password: process.env.DB_PASSWORD || process.env.MYSQLPASSWORD || '',
-  database: process.env.DB_NAME || process.env.MYSQLDATABASE || 'estoque_db',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  connectTimeout: 10000 // 10 segundos de limite para conectar
-});
+let poolConfig;
+
+if (process.env.MYSQL_URL || process.env.MYSQLURL) {
+  poolConfig = {
+    uri: process.env.MYSQL_URL || process.env.MYSQLURL,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    connectTimeout: 15000
+  };
+} else {
+  poolConfig = {
+    host: process.env.DB_HOST || process.env.MYSQLHOST || 'localhost',
+    port: process.env.DB_PORT || process.env.MYSQLPORT || 3306,
+    user: process.env.DB_USER || process.env.MYSQLUSER || 'root',
+    password: process.env.DB_PASSWORD || process.env.MYSQLPASSWORD || '',
+    database: process.env.DB_NAME || process.env.MYSQLDATABASE || 'estoque_db',
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    connectTimeout: 15000
+  };
+}
+
+const db = mysql.createPool(poolConfig);
  
 // Tenta conectar sem travar o Express
 db.getConnection((err, connection) => {
   if (err) { 
     console.error('❌ Erro crítico ao conectar no MySQL:', err.message); 
-    console.error('👉 Verifique as variáveis de ambiente (DB_HOST, DB_PASSWORD...) no painel do Railway.');
-    return; // Não trava o app, o Express continuará rodando
+    console.error('👉 Verifique as variáveis de ambiente no painel do Railway.');
+    return;
   }
   console.log('✅ Conectado ao MySQL com Pool de Conexões com sucesso!');
   connection.release();
@@ -118,10 +132,28 @@ function createTables() {
     });
   });
  
-  // Alter de forma segura ignorando duplicatas se a coluna já existir
-  db.query(`ALTER TABLE pendencias ADD COLUMN observacoes JSON DEFAULT NULL`, (err) => {
-    if (err && !err.message.includes('duplicate') && !err.message.includes('already exists')) {
-      console.error('⚠️ Erro ao checar coluna observacoes:', err.message);
+  // CORREÇÃO: Verifica se a coluna já existe no banco antes de rodar o ALTER TABLE
+  db.query(`
+    SELECT COUNT(*) AS existe 
+    FROM INFORMATION_SCHEMA.COLUMNS 
+    WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = 'pendencias' 
+      AND COLUMN_NAME = 'observacoes'
+  `, (err, rows) => {
+    if (err) {
+      console.error('⚠️ Erro ao verificar existência da coluna observacoes:', err.message);
+      return;
+    }
+
+    // Se a coluna NÃO existe (existe === 0), ela é adicionada com segurança
+    if (rows && rows[0] && rows[0].existe === 0) {
+      db.query(`ALTER TABLE pendencias ADD COLUMN observacoes JSON DEFAULT NULL`, (errAlter) => {
+        if (errAlter) {
+          console.error('❌ Erro ao adicionar coluna observacoes:', errAlter.message);
+        } else {
+          console.log('✅ Coluna "observacoes" adicionada na tabela pendencias com sucesso!');
+        }
+      });
     }
   });
 }
@@ -236,7 +268,7 @@ app.delete('/api/clientes/:id', (req, res) => {
  
 // ========== PENDÊNCIAS ==========
 app.post('/api/pendencias', (req, res) => {
-  const { cliente_id, descricao, valor, data } = req.body;
+  const { cliente_id, descricao, valor, data } = pm.body;
   db.query('INSERT INTO pendencias (cliente_id, descricao, valor, data, observacoes) VALUES (?,?,?,?,?)',
     [cliente_id, descricao, valor || 0, data, JSON.stringify([])],
     (err, r) => err ? res.status(500).json({ error: err.message }) : res.status(201).json({ success: true, id: r.insertId }));
@@ -306,7 +338,6 @@ app.delete('/api/orcamentos/:id', (req, res) => {
 });
  
 // ========== INICIALIZAÇÃO DO SERVIDOR ==========
-// Mudança crítica: Definindo o host '0.0.0.0' para o proxy do Railway conseguir se comunicar com o container
 const HOST = '0.0.0.0';
 
 app.listen(PORT, HOST, () => {
