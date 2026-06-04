@@ -305,7 +305,10 @@ app.delete('/api/orcamentos/:id', (req, res) => {
     (err) => err ? res.status(500).json({ error: err.message }) : res.json({ success: true }));
 });
  
-// ========== INICIALIZAÇÃO DO SERVIDOR (Executa independente do MySQL) ==========
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor Express rodando com sucesso total na porta ${PORT}`);
+// ========== INICIALIZAÇÃO DO SERVIDOR ==========
+// Mudança crítica: Definindo o host '0.0.0.0' para o proxy do Railway conseguir se comunicar com o container
+const HOST = '0.0.0.0';
+
+app.listen(PORT, HOST, () => {
+  console.log(`🚀 Servidor Express rodando com sucesso total em http://${HOST}:${PORT}`);
 });
