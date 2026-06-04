@@ -1,26 +1,23 @@
 const express = require('express');
 const mysql = require('mysql2');
 const cors = require('cors');
-
-// REMOVIDO: bodyParser (O Express já faz isso nativamente agora)
 require('dotenv').config();
  
 const app = express();
 const PORT = process.env.PORT || 3000;
  
-// ========== CORS ==========
+// ========== CORS (Configuração robusta para o Frontend) ==========
 app.use(cors({
-  origin: '*', // Em produção final, mude para a URL do seu frontend hospedado
+  origin: '*', 
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
-app.options('*', cors()); 
+app.options('*', cors());
  
-// Middleware Nativo do Express (Substitui o bodyParser)
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
  
-// ========== BANCO DE DADOS ==========
+// ========== CONFIGURAÇÃO DO BANCO DE DADOS ==========
 const db = mysql.createPool({
   host: process.env.DB_HOST || process.env.MYSQLHOST || 'localhost',
   port: process.env.DB_PORT || process.env.MYSQLPORT || 3306,
@@ -29,21 +26,23 @@ const db = mysql.createPool({
   database: process.env.DB_NAME || process.env.MYSQLDATABASE || 'estoque_db',
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  connectTimeout: 10000 // 10 segundos de limite para conectar
 });
  
+// Tenta conectar sem travar o Express
 db.getConnection((err, connection) => {
   if (err) { 
-    console.error('❌ Erro ao conectar ao MySQL:', err.message); 
-    return; 
+    console.error('❌ Erro crítico ao conectar no MySQL:', err.message); 
+    console.error('👉 Verifique as variáveis de ambiente (DB_HOST, DB_PASSWORD...) no painel do Railway.');
+    return; // Não trava o app, o Express continuará rodando
   }
-  console.log('✅ Conectado ao MySQL com Pool de Conexões');
+  console.log('✅ Conectado ao MySQL com Pool de Conexões com sucesso!');
   connection.release();
   createTables();
 });
  
 function createTables() {
-  // CORREÇÃO: Usar IF NOT EXISTS em vez de DROP TABLE para evitar deletar dados dos seus clientes em produção a cada reinício do servidor!
   const tServicos = `CREATE TABLE IF NOT EXISTS servicos (
     id INT AUTO_INCREMENT PRIMARY KEY,
     client VARCHAR(255) NOT NULL,
@@ -115,29 +114,21 @@ function createTables() {
  
   tables.forEach((sql, i) => {
     db.query(sql, (err) => {
-      if (err) console.error(`❌ Erro na tabela ${i + 1}:`, err.message);
-      else console.log(`✅ Tabela ${i + 1} verificada/ok`);
+      if (err) console.error(`❌ Erro estrutural na tabela ${i + 1}:`, err.message);
     });
   });
  
-  // Tratamento seguro para adicionar colunas em bancos legados
-  db.query(`ALTER TABLE pendencias ADD COLUMN IF NOT EXISTS observacoes JSON DEFAULT NULL`, (err) => {
-    if (err && !err.message.includes('Duplicate column') && !err.message.includes('syntax error')) {
-      // Alguns sabores de MySQL antigo não aceitam "ADD COLUMN IF NOT EXISTS". Se falhar, tentamos o formato padrão:
-      db.query(`ALTER TABLE pendencias ADD COLUMN observacoes JSON DEFAULT NULL`, (errPadrao) => {
-        if (errPadrao && !errPadrao.message.includes('duplicate')) {
-          console.error('⚠️ Nota: Coluna observacoes pode já existir ou precisa de verificação manual.');
-        }
-      });
-    } else {
-      console.log('✅ Verificação da coluna observacoes concluída');
+  // Alter de forma segura ignorando duplicatas se a coluna já existir
+  db.query(`ALTER TABLE pendencias ADD COLUMN observacoes JSON DEFAULT NULL`, (err) => {
+    if (err && !err.message.includes('duplicate') && !err.message.includes('already exists')) {
+      console.error('⚠️ Erro ao checar coluna observacoes:', err.message);
     }
   });
 }
  
-// ========== HEALTH CHECK (Mantém o Railway ativo) ==========
-app.get('/health', (req, res) => res.json({ status: 'ok' }));
-app.get('/', (req, res) => res.json({ message: '🚀 API Jander Vidros funcionando!' }));
+// ========== ROTAS DE TESTE / INICIALIZAÇÃO ==========
+app.get('/health', (req, res) => res.json({ status: 'ok', database: 'Pool inicializado' }));
+app.get('/', (req, res) => res.json({ message: '🚀 API Jander Vidros operando em produção!' }));
  
 // ========== PRODUTOS ==========
 app.get('/api/produtos', (req, res) => {
@@ -314,7 +305,7 @@ app.delete('/api/orcamentos/:id', (req, res) => {
     (err) => err ? res.status(500).json({ error: err.message }) : res.json({ success: true }));
 });
  
-// ========== START ==========
+// ========== INICIALIZAÇÃO DO SERVIDOR (Executa independente do MySQL) ==========
 app.listen(PORT, () => {
-  console.log(`🚀 Servidor rodando com sucesso na porta ${PORT}`);
+  console.log(`🚀 Servidor Express rodando com sucesso total na porta ${PORT}`);
 });
