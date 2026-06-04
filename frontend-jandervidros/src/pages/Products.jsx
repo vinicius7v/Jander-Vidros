@@ -16,7 +16,7 @@ function Products({ user, onLogout }) {
     let cancelled = false;
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    const timeout = setTimeout(() => controller.abort(), 25000);
 
     try {
       setLoading(true);
