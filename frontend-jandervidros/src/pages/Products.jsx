@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Navbar from '../components/Navbar';
 import ProductForm from '../components/ProductForm';
 import ProductTable from '../components/ProductTable';
@@ -12,62 +12,71 @@ function Products({ user, onLogout }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const loadProducts = useCallback(async () => {
-    let cancelled = false;
+  // Usamos um useRef para gerenciar o cancelamento ativo entre renderizações com segurança
+  const activeControllerRef = useRef(null);
 
+  const loadProducts = useCallback(async () => {
+    // 1. Cancela qualquer requisição anterior que ainda esteja rodando
+    if (activeControllerRef.current) {
+      activeControllerRef.current.abort();
+    }
+
+    // 2. Cria um novo controller para esta tentativa
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25000);
+    activeControllerRef.current = controller;
+
+    // Timeout expandido para dar tempo ao "cold start" do Railway/MySQL
+    const timeout = setTimeout(() => controller.abort(), 30000);
 
     try {
       setLoading(true);
       setError(null);
 
-      const data = await productService.getAll(controller.signal);
+      const response = await productService.getAll(controller.signal);
 
-      if (cancelled) return;
+      // Garante a compatibilidade se a resposta vier como { data: [...] } ou direto o array
+      const rawProducts = response?.data || response || [];
 
-      const formattedProducts = data.map(p => ({
-        id: p.id.toString(),
-        name: p.nome,
-        category: p.categoria,
-        quantity: p.quantidade,
-        price: parseFloat(p.preco),
-        minStock: p.estoque_minimo,
+      const formattedProducts = rawProducts.map(p => ({
+        id: p.id ? p.id.toString() : Math.random().toString(),
+        name: p.nome || 'Sem nome',
+        category: p.categoria || 'Sem categoria',
+        quantity: parseInt(p.quantidade) || 0,
+        price: p.preco ? parseFloat(p.preco) : 0,
+        minStock: p.estoque_minimo || 0,
         createdAt: p.data_criacao,
-
-        purchasePrice: parseFloat(p.preco_compra),
-        salePrice:     parseFloat(p.preco_venda),
-        supplier:      p.fornecedor,
         purchasePrice: p.preco_compra ? parseFloat(p.preco_compra) : null,
-        salePrice:     p.preco_venda  ? parseFloat(p.preco_venda)  : null,
-        supplier:      p.fornecedor   ?? null,
+        salePrice: p.preco_venda ? parseFloat(p.preco_venda) : null,
+        supplier: p.fornecedor ?? null,
       }));
 
       setProducts(formattedProducts);
     } catch (err) {
-      if (cancelled) return;
-
-      if (err.name === 'AbortError') {
-        setError('A requisição demorou demais. Verifique a conexão com o backend.');
-      } else {
-        setError('Erro ao carregar produtos. Verifique se o backend está rodando.');
+      // Se o erro foi um cancelamento intencional do React, não atualiza o estado de erro na tela
+      if (err.name === 'AbortError' || controller.signal.aborted) {
+        console.log('Requisição limpa/cancelada pelo ciclo de vida do componente.');
+        return;
       }
+
+      setError('Erro ao carregar produtos. Verifique se o backend e o MySQL estão online no Railway.');
       console.error(err);
     } finally {
       clearTimeout(timeout);
-      if (!cancelled) setLoading(false);
+      // Só desativa o loading se este controller ainda for o atual ativo
+      if (activeControllerRef.current === controller) {
+        setLoading(false);
+      }
     }
-
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
   }, []);
 
+  // Executa ao montar o componente e limpa ao desmontar
   useEffect(() => {
-    const cancel = loadProducts();
+    loadProducts();
+    
     return () => {
-      if (typeof cancel === 'function') cancel();
+      if (activeControllerRef.current) {
+        activeControllerRef.current.abort();
+      }
     };
   }, [loadProducts]);
 
@@ -131,7 +140,7 @@ function Products({ user, onLogout }) {
             <div className="text-red-600 font-semibold">❌ {error}</div>
             <button
               onClick={loadProducts}
-              className="mt-4 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
+              className="mt-4 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
             >
               Tentar novamente
             </button>
@@ -152,7 +161,10 @@ function Products({ user, onLogout }) {
             <p className="text-gray-600">Conectado ao MySQL ✅</p>
           </div>
           <button
-            onClick={() => setIsAdding(!isAdding)}
+            onClick={() => {
+              if (isAdding) handleCancel();
+              else setIsAdding(true);
+            }}
             className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors font-semibold shadow-md"
           >
             {isAdding ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
