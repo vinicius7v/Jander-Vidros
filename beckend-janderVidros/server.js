@@ -21,8 +21,12 @@ app.use(express.urlencoded({ extended: true }));
 let poolConfig;
 
 if (process.env.MYSQL_URL || process.env.MYSQLURL) {
+  // ✅ Corrigido: garante que a URL usa porta 3306 e não 8080
+  let dbUrl = process.env.MYSQL_URL || process.env.MYSQLURL;
+  dbUrl = dbUrl.replace(/:8080\//, ':3306/');
+
   poolConfig = {
-    uri: process.env.MYSQL_URL || process.env.MYSQLURL,
+    uri: dbUrl,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
@@ -31,7 +35,7 @@ if (process.env.MYSQL_URL || process.env.MYSQLURL) {
 } else {
   poolConfig = {
     host: process.env.DB_HOST || process.env.MYSQLHOST || 'localhost',
-    port: process.env.DB_PORT || process.env.MYSQLPORT || 3306,
+    port: parseInt(process.env.DB_PORT || process.env.MYSQLPORT || 3306),
     user: process.env.DB_USER || process.env.MYSQLUSER || 'root',
     password: process.env.DB_PASSWORD || process.env.MYSQLPASSWORD || '',
     database: process.env.DB_NAME || process.env.MYSQLDATABASE || 'estoque_db',
@@ -44,7 +48,7 @@ if (process.env.MYSQL_URL || process.env.MYSQLURL) {
 
 const db = mysql.createPool(poolConfig);
  
-// Tenta conectar sem travar o Express
+// Testa conexão sem travar o Express
 db.getConnection((err, connection) => {
   if (err) { 
     console.error('❌ Erro crítico ao conectar no MySQL:', err.message); 
@@ -132,7 +136,6 @@ function createTables() {
     });
   });
  
-  // CORREÇÃO: Verifica se a coluna já existe no banco antes de rodar o ALTER TABLE
   db.query(`
     SELECT COUNT(*) AS existe 
     FROM INFORMATION_SCHEMA.COLUMNS 
@@ -144,8 +147,6 @@ function createTables() {
       console.error('⚠️ Erro ao verificar existência da coluna observacoes:', err.message);
       return;
     }
-
-    // Se a coluna NÃO existe (existe === 0), ela é adicionada com segurança
     if (rows && rows[0] && rows[0].existe === 0) {
       db.query(`ALTER TABLE pendencias ADD COLUMN observacoes JSON DEFAULT NULL`, (errAlter) => {
         if (errAlter) {
@@ -268,7 +269,8 @@ app.delete('/api/clientes/:id', (req, res) => {
  
 // ========== PENDÊNCIAS ==========
 app.post('/api/pendencias', (req, res) => {
-  const { cliente_id, descricao, valor, data } = pm.body;
+  // ✅ Corrigido: era pm.body (typo), agora req.body
+  const { cliente_id, descricao, valor, data } = req.body;
   db.query('INSERT INTO pendencias (cliente_id, descricao, valor, data, observacoes) VALUES (?,?,?,?,?)',
     [cliente_id, descricao, valor || 0, data, JSON.stringify([])],
     (err, r) => err ? res.status(500).json({ error: err.message }) : res.status(201).json({ success: true, id: r.insertId }));
