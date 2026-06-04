@@ -5,6 +5,14 @@ require('dotenv').config();
  
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// ========== ACELERAÇÃO DE REDE (KEEP-ALIVE HTTP) ==========
+// Mantém as conexões HTTP abertas com o Frontend, evitando o atraso de reconexão TCP a cada requisição
+app.use((req, res, next) => {
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Keep-Alive', 'timeout=30');
+  next();
+});
  
 // ========== CORS (Configuração robusta para o Frontend) ==========
 app.use(cors({
@@ -21,12 +29,8 @@ app.use(express.urlencoded({ extended: true }));
 let poolConfig;
 
 if (process.env.MYSQL_URL || process.env.MYSQLURL) {
-  // ✅ Corrigido: garante que a URL usa porta 3306 e não 8080
-  let dbUrl = process.env.MYSQL_URL || process.env.MYSQLURL;
-  dbUrl = dbUrl.replace(/:8080\//, ':3306/');
-
   poolConfig = {
-    uri: dbUrl,
+    uri: process.env.MYSQL_URL || process.env.MYSQLURL,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
@@ -35,7 +39,7 @@ if (process.env.MYSQL_URL || process.env.MYSQLURL) {
 } else {
   poolConfig = {
     host: process.env.DB_HOST || process.env.MYSQLHOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || process.env.MYSQLPORT || 3306),
+    port: process.env.DB_PORT || 3306,
     user: process.env.DB_USER || process.env.MYSQLUSER || 'root',
     password: process.env.DB_PASSWORD || process.env.MYSQLPASSWORD || '',
     database: process.env.DB_NAME || process.env.MYSQLDATABASE || 'estoque_db',
@@ -48,7 +52,7 @@ if (process.env.MYSQL_URL || process.env.MYSQLURL) {
 
 const db = mysql.createPool(poolConfig);
  
-// Testa conexão sem travar o Express
+// Tenta conectar sem travar o Express
 db.getConnection((err, connection) => {
   if (err) { 
     console.error('❌ Erro crítico ao conectar no MySQL:', err.message); 
@@ -147,13 +151,11 @@ function createTables() {
       console.error('⚠️ Erro ao verificar existência da coluna observacoes:', err.message);
       return;
     }
+
     if (rows && rows[0] && rows[0].existe === 0) {
       db.query(`ALTER TABLE pendencias ADD COLUMN observacoes JSON DEFAULT NULL`, (errAlter) => {
-        if (errAlter) {
-          console.error('❌ Erro ao adicionar coluna observacoes:', errAlter.message);
-        } else {
-          console.log('✅ Coluna "observacoes" adicionada na tabela pendencias com sucesso!');
-        }
+        if (errAlter) console.error('❌ Erro ao adicionar coluna observacoes:', errAlter.message);
+        else console.log('✅ Coluna "observacoes" adicionada na tabela pendencias com sucesso!');
       });
     }
   });
@@ -269,8 +271,7 @@ app.delete('/api/clientes/:id', (req, res) => {
  
 // ========== PENDÊNCIAS ==========
 app.post('/api/pendencias', (req, res) => {
-  // ✅ Corrigido: era pm.body (typo), agora req.body
-  const { cliente_id, descricao, valor, data } = req.body;
+  const { cliente_id, descricao, valor, data } = req.body; // Corrigido de pm.body para req.body
   db.query('INSERT INTO pendencias (cliente_id, descricao, valor, data, observacoes) VALUES (?,?,?,?,?)',
     [cliente_id, descricao, valor || 0, data, JSON.stringify([])],
     (err, r) => err ? res.status(500).json({ error: err.message }) : res.status(201).json({ success: true, id: r.insertId }));
@@ -339,9 +340,13 @@ app.delete('/api/orcamentos/:id', (req, res) => {
     (err) => err ? res.status(500).json({ error: err.message }) : res.json({ success: true }));
 });
  
-// ========== INICIALIZAÇÃO DO SERVIDOR ==========
+// ========== INICIALIZAÇÃO DO SERVIDOR COM TIMEOUTS DE REDE ==========
 const HOST = '0.0.0.0';
 
-app.listen(PORT, HOST, () => {
+const server = app.listen(PORT, HOST, () => {
   console.log(`🚀 Servidor Express rodando com sucesso total em http://${HOST}:${PORT}`);
 });
+
+// Força o servidor a segurar e otimizar conexões abertas com a nuvem (Vercel)
+server.keepAliveTimeout = 30000;
+server.headersTimeout = 35000;
