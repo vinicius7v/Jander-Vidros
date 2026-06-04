@@ -26,7 +26,7 @@ function Products({ user, onLogout }) {
     activeControllerRef.current = controller;
 
     // Timeout expandido para dar tempo ao "cold start" do Railway/MySQL
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    const timeout = setTimeout(() => controller.abort(), 3000);
 
     try {
       setLoading(true);
