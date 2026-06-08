@@ -167,7 +167,8 @@ function ModalOrcamento({ onSave, onCancel }) {
                 <div key={i} className="flex gap-2 items-center">
                   {/* ✅ CORRIGIDO: Descrição primeiro (texto livre), depois Qtd (número), depois Preço */}
                   <input
-                    className={`${inputClass} flex-[3]`}
+                    className={inputClass}
+                    style={{ flex: 3, minWidth: 0 }}
                     type="text"
                     placeholder="Nome do produto / serviço *"
                     value={item.desc}
@@ -175,7 +176,8 @@ function ModalOrcamento({ onSave, onCancel }) {
                     required
                   />
                   <input
-                    className={`${inputClass} w-20 text-center`}
+                    className={inputClass}
+                    style={{ width: '72px', textAlign: 'center', flexShrink: 0 }}
                     type="number"
                     min="1"
                     placeholder="Qtd"
@@ -184,7 +186,8 @@ function ModalOrcamento({ onSave, onCancel }) {
                     required
                   />
                   <input
-                    className={`${inputClass} w-28`}
+                    className={inputClass}
+                    style={{ width: '110px', flexShrink: 0 }}
                     type="number"
                     step="0.01"
                     min="0"
