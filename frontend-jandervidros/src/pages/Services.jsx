@@ -3,7 +3,6 @@ import Navbar from '../components/Navbar';
 import { serviceService, orcamentoService } from '../services/api';
 import { Wrench, Plus, CheckCircle, Clock, Trash2, Calendar, History, FileText, Printer, X } from 'lucide-react';
 
-// ─── Impressão do Orçamento ───────────────────────────────────────────
 function OrcamentoPrint({ orc, onClose }) {
   const handlePrint = () => window.print();
   const total = orc.items.reduce((s, i) => s + i.qty * parseFloat(i.unit), 0);
@@ -166,9 +165,34 @@ function ModalOrcamento({ onSave, onCancel }) {
             <div className="space-y-3">
               {items.map((item, i) => (
                 <div key={i} className="flex gap-2 items-center">
-                  <input className={`${inputClass} flex-[3]`} placeholder="Descrição *" value={item.desc} onChange={e => updateItem(i, 'desc', e.target.value)} required />
-                  <input className={`${inputClass} w-16 text-center`} type="number" min="1" placeholder="Qtd" value={item.qty} onChange={e => updateItem(i, 'qty', e.target.value)} required />
-                  <input className={`${inputClass} w-28`} type="number" step="0.01" placeholder="R$ Unit." value={item.unit} onChange={e => updateItem(i, 'unit', e.target.value)} required />
+                  {/* ✅ CORRIGIDO: Descrição primeiro (texto livre), depois Qtd (número), depois Preço */}
+                  <input
+                    className={`${inputClass} flex-[3]`}
+                    type="text"
+                    placeholder="Nome do produto / serviço *"
+                    value={item.desc}
+                    onChange={e => updateItem(i, 'desc', e.target.value)}
+                    required
+                  />
+                  <input
+                    className={`${inputClass} w-20 text-center`}
+                    type="number"
+                    min="1"
+                    placeholder="Qtd"
+                    value={item.qty}
+                    onChange={e => updateItem(i, 'qty', e.target.value)}
+                    required
+                  />
+                  <input
+                    className={`${inputClass} w-28`}
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="R$ Unit."
+                    value={item.unit}
+                    onChange={e => updateItem(i, 'unit', e.target.value)}
+                    required
+                  />
                   {items.length > 1 && (
                     <button type="button" onClick={() => removeItem(i)} className="text-gray-300 hover:text-red-500 shrink-0"><Trash2 size={16} /></button>
                   )}
@@ -287,7 +311,6 @@ function Services({ user, onLogout }) {
           </button>
         </div>
 
-        {/* Tabs */}
         <div className="flex gap-2 mb-6 bg-white p-2 rounded-2xl shadow w-fit">
           <button onClick={() => setTab('servicos')}
             className={`px-6 py-2 rounded-xl text-sm font-black uppercase transition-all flex items-center gap-2 ${tab === 'servicos' ? 'bg-indigo-600 text-white shadow' : 'text-gray-500 hover:bg-gray-100'}`}>
@@ -300,7 +323,6 @@ function Services({ user, onLogout }) {
           </button>
         </div>
 
-        {/* ════ ABA SERVIÇOS ════ */}
         {tab === 'servicos' && (
           <>
             <div className="flex gap-4 mb-8">
@@ -349,7 +371,6 @@ function Services({ user, onLogout }) {
           </>
         )}
 
-        {/* ════ ABA ORÇAMENTOS ════ */}
         {tab === 'orcamentos' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {orcamentos.length === 0 ? (
@@ -395,7 +416,6 @@ function Services({ user, onLogout }) {
         )}
       </div>
 
-      {/* Modal serviço */}
       {isServiceModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-[2.5rem] w-full max-w-lg p-8 shadow-2xl">
