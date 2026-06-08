@@ -7,14 +7,13 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ========== ACELERAÇÃO DE REDE (KEEP-ALIVE HTTP) ==========
-// Mantém as conexões HTTP abertas com o Frontend, evitando o atraso de reconexão TCP a cada requisição
 app.use((req, res, next) => {
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('Keep-Alive', 'timeout=30');
   next();
 });
  
-// ========== CORS (Configuração robusta para o Frontend) ==========
+// ========== CORS ==========
 app.use(cors({
   origin: '*', 
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -52,7 +51,6 @@ if (process.env.MYSQL_URL || process.env.MYSQLURL) {
 
 const db = mysql.createPool(poolConfig);
  
-// Tenta conectar sem travar o Express
 db.getConnection((err, connection) => {
   if (err) { 
     console.error('❌ Erro crítico ao conectar no MySQL:', err.message); 
@@ -151,7 +149,6 @@ function createTables() {
       console.error('⚠️ Erro ao verificar existência da coluna observacoes:', err.message);
       return;
     }
-
     if (rows && rows[0] && rows[0].existe === 0) {
       db.query(`ALTER TABLE pendencias ADD COLUMN observacoes JSON DEFAULT NULL`, (errAlter) => {
         if (errAlter) console.error('❌ Erro ao adicionar coluna observacoes:', errAlter.message);
@@ -161,9 +158,24 @@ function createTables() {
   });
 }
  
-// ========== ROTAS DE TESTE / INICIALIZAÇÃO ==========
+// ========== ROTAS DE SAÚDE / DIAGNÓSTICO ==========
 app.get('/health', (req, res) => res.json({ status: 'ok', database: 'Pool inicializado' }));
 app.get('/', (req, res) => res.json({ message: '🚀 API Jander Vidros operando em produção!' }));
+
+// 🔍 ROTA DE DIAGNÓSTICO — mede o tempo real de conexão com o banco
+// Acesse: https://sua-api.railway.app/test-db
+app.get('/test-db', (req, res) => {
+  const start = Date.now();
+  db.query('SELECT 1', (err) => {
+    const tempo = Date.now() - start;
+    res.json({
+      status: err ? '❌ Erro na conexão' : '✅ Conexão OK',
+      tempo_ms: tempo,
+      aviso: tempo > 300 ? '⚠️ Lento — verifique a região do Railway' : '🚀 Conexão rápida',
+      erro: err?.message || null
+    });
+  });
+});
  
 // ========== PRODUTOS ==========
 app.get('/api/produtos', (req, res) => {
@@ -239,20 +251,47 @@ app.delete('/api/servicos/:id', (req, res) => {
 });
  
 // ========== CLIENTES ==========
+// ✅ CORRIGIDO: era 2 queries separadas (lento), agora usa 1 JOIN (rápido)
 app.get('/api/clientes', (req, res) => {
-  db.query('SELECT * FROM clientes ORDER BY nome ASC', (err, clientes) => {
+  const sql = `
+    SELECT 
+      c.id, c.nome, c.telefone, c.email, c.created_at,
+      p.id AS pend_id, p.descricao, p.valor, p.data,
+      p.status AS pend_status, p.observacoes
+    FROM clientes c
+    LEFT JOIN pendencias p ON p.cliente_id = c.id
+    ORDER BY c.nome ASC
+  `;
+  db.query(sql, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-    db.query('SELECT * FROM pendencias', (err2, pendencias) => {
-      if (err2) return res.status(500).json({ error: err2.message });
-      const data = clientes.map(c => ({
-        ...c,
-        pendencias: pendencias.filter(p => p.cliente_id === c.id).map(p => ({
-          ...p,
-          observacoes: typeof p.observacoes === 'string' ? JSON.parse(p.observacoes || '[]') : (p.observacoes || [])
-        }))
-      }));
-      res.json({ success: true, data });
+
+    const clientesMap = {};
+    rows.forEach(row => {
+      if (!clientesMap[row.id]) {
+        clientesMap[row.id] = {
+          id: row.id,
+          nome: row.nome,
+          telefone: row.telefone,
+          email: row.email,
+          created_at: row.created_at,
+          pendencias: []
+        };
+      }
+      if (row.pend_id) {
+        clientesMap[row.id].pendencias.push({
+          id: row.pend_id,
+          descricao: row.descricao,
+          valor: row.valor,
+          data: row.data,
+          status: row.pend_status,
+          observacoes: typeof row.observacoes === 'string'
+            ? JSON.parse(row.observacoes || '[]')
+            : (row.observacoes || [])
+        });
+      }
     });
+
+    res.json({ success: true, data: Object.values(clientesMap) });
   });
 });
  
@@ -271,7 +310,7 @@ app.delete('/api/clientes/:id', (req, res) => {
  
 // ========== PENDÊNCIAS ==========
 app.post('/api/pendencias', (req, res) => {
-  const { cliente_id, descricao, valor, data } = req.body; // Corrigido de pm.body para req.body
+  const { cliente_id, descricao, valor, data } = req.body;
   db.query('INSERT INTO pendencias (cliente_id, descricao, valor, data, observacoes) VALUES (?,?,?,?,?)',
     [cliente_id, descricao, valor || 0, data, JSON.stringify([])],
     (err, r) => err ? res.status(500).json({ error: err.message }) : res.status(201).json({ success: true, id: r.insertId }));
@@ -340,13 +379,12 @@ app.delete('/api/orcamentos/:id', (req, res) => {
     (err) => err ? res.status(500).json({ error: err.message }) : res.json({ success: true }));
 });
  
-// ========== INICIALIZAÇÃO DO SERVIDOR COM TIMEOUTS DE REDE ==========
+// ========== INICIALIZAÇÃO DO SERVIDOR ==========
 const HOST = '0.0.0.0';
 
 const server = app.listen(PORT, HOST, () => {
   console.log(`🚀 Servidor Express rodando com sucesso total em http://${HOST}:${PORT}`);
 });
 
-// Força o servidor a segurar e otimizar conexões abertas com a nuvem (Vercel)
 server.keepAliveTimeout = 30000;
 server.headersTimeout = 35000;
